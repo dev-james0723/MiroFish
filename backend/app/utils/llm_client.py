@@ -55,13 +55,25 @@ class LLMClient:
             "model": self.model,
             "messages": messages,
             "temperature": temperature,
-            "max_tokens": max_tokens,
+            "max_completion_tokens": max_tokens,
         }
         
         if response_format:
             kwargs["response_format"] = response_format
         
-        response = self.client.chat.completions.create(**kwargs)
+        try:
+            response = self.client.chat.completions.create(**kwargs)
+        except Exception as e:
+            err = str(e)
+            if "temperature" in err and "Unsupported" in err:
+                kwargs.pop("temperature", None)
+                response = self.client.chat.completions.create(**kwargs)
+            elif "max_tokens" in err and "max_completion_tokens" in err:
+                kwargs.pop("max_tokens", None)
+                kwargs.setdefault("max_completion_tokens", max_tokens)
+                response = self.client.chat.completions.create(**kwargs)
+            else:
+                raise
         content = response.choices[0].message.content
         # 部分模型（如MiniMax M2.5）会在content中包含<think>思考内容，需要移除
         content = re.sub(r'<think>[\s\S]*?</think>', '', content).strip()
